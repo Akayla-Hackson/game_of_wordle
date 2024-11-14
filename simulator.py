@@ -97,7 +97,7 @@ class WordleSimulator:
         average_attempts = sum(attempts_distribution) / self.num_games
         print(f"Number of Successes: {successes}")
         print(f"Success Rate: {success_rate*100:.4f}%")
-        print(f"Average Attempts Needed: {average_attempts:.4f}")
+        print(f"Average Guesses Needed: {average_attempts:.4f}")
         self.plot_results(attempts_distribution)
 
 
