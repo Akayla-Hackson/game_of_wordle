@@ -20,7 +20,7 @@ import os
 #
 ####################################################################################################################################################################
 class WordleSimulator:
-    def __init__(self, solutions_file, max_guesses=50, num_games=100, strategy='random'):
+    def __init__(self, solutions_file, max_guesses=6, num_games=1000, strategy='random'):
         #### load words from CSV files ####
         self.valid_solutions = pd.read_csv(solutions_file, header=None).iloc[:,0].tolist()
         self.max_guesses = int(max_guesses)
