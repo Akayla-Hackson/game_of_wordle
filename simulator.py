@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-
+import argparse
 #####################################################################################################################################################################
 # This class creates a simulation of the game of Wordle. 
 # note: some code is commented out becasue the valid_guesses.csv and valid_solutions.csv do not have any overlap in words, 
@@ -20,7 +20,7 @@ import os
 #
 ####################################################################################################################################################################
 class WordleSimulator:
-    def __init__(self, solutions_file, max_guesses=6, num_games=1000, strategy='random'):
+    def __init__(self, solutions_file, max_guesses, num_games, strategy):
         #### load words from CSV files ####
         self.valid_solutions = pd.read_csv(solutions_file, header=None).iloc[:,0].tolist()
         self.max_guesses = int(max_guesses)
@@ -120,11 +120,17 @@ class WordleSimulator:
         plt.savefig(f'plots_of_runs/{self.strategy}/{self.max_guesses}guesses_{self.num_games}_games.png')
 
 
+def main(args):
+    game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy)
+    game.simulate_games()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Run the Wordle simulator with different strategies.")
+    parser.add_argument('--strategy', type=str, default='random', help='The strategy to use for simulating the game.')
+    parser.add_argument('--max_guesses', type=int, default=6, help='The maximum number of guesses allowed per game (6 is the normal amount for Wordle).')
+    parser.add_argument('--num_games', type=int, default=1000, help='The number of games to simulate.')
+    args = parser.parse_args()
+    main(args)
 
 
-guesses_file = './kaggle_data/valid_guesses.csv'
-solutions_file = './kaggle_data/valid_solutions.csv'
-game = WordleSimulator(solutions_file)
-
-game.simulate_games()
-
+# Example run:  python simulator.py --strategy random --max_guesses 6 --num_games 1000
