@@ -1,3 +1,4 @@
+from collections import defaultdict
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,6 +20,7 @@ class WordleSimulator:
 
     def reset_game(self):
         self.secret_word = random.choice(self.valid_solutions)
+        print(f"The secret word is: {self.secret_word}")
         self.valid_guesses = self.valid_solutions.copy()
 
     def play_game(self):
@@ -26,9 +28,14 @@ class WordleSimulator:
             return self.random_guessing()
         elif self.strategy == 'baseline':
             return self.baseline_guessing()
+        elif self.strategy == 'mcts':
+            return self.mcts_guessing()
+        else:
+            raise ValueError(f"Invalid strategy: {self.strategy}")
 
     def guess_word(self, guess):
         if len(guess) != len(self.secret_word) or guess not in self.valid_guesses:
+            print(f"Invalid guess: {guess}")
             return None 
 
         if guess in self.valid_guesses:
@@ -66,37 +73,102 @@ class WordleSimulator:
         print(visual_feedback)
 
     def random_guessing(self):
-        for attempt in range(1, self.max_guesses + 1):
+        remaining_attempts = self.max_guesses
+        for attempt in range(1, remaining_attempts + 1):
             if not self.valid_guesses:
                 print("No more valid guesses available.")
                 return False, attempt
+            
             guess = random.choice(self.valid_guesses)
             feedback = self.guess_word(guess)
             self.display_guess_feedback(guess, feedback)
+
             if guess == self.secret_word:
                 print("The secret word was guessed correctly!")
                 return True, attempt
         print("Failed to guess the secret word within the allowed attempts.")
-        return False, self.max_guesses
+        return False, remaining_attempts
 
     def baseline_guessing(self):
+        remaining_attempts = self.max_guesses  # Initialize a local counter for guesses
         possible_words = self.valid_guesses.copy()
-        for attempt in range(1, self.max_guesses + 1):
+        
+        for attempt in range(1, remaining_attempts + 1):
             if not possible_words:
                 print("No more valid guesses available.")
                 return False, attempt
-            
+
             guess = random.choice(possible_words)
+            possible_words.remove(guess)
             feedback = self.guess_word(guess)
             self.display_guess_feedback(guess, feedback)
 
             if guess == self.secret_word:
                 print("The secret word was guessed correctly!")
                 return True, attempt
-            
+
+            # Identify letters by their feedback type
             gray_letters = {guess[i] for i in range(len(feedback)) if feedback[i] == 'Gray'}
             yellow_positions = {i: guess[i] for i in range(len(feedback)) if feedback[i] == 'Yellow'}
+            yellow_letters = {guess[i] for i in range(len(feedback)) if feedback[i] == 'Yellow'}
             green_positions = {i: guess[i] for i in range(len(feedback)) if feedback[i] == 'Green'}
+            green_letters = {guess[i] for i in range(len(feedback)) if feedback[i] == 'Green'}
+
+            def valid_word(word):
+                if any(letter in word for letter in gray_letters):
+                    if not (any(letter in green_letters for letter in gray_letters) or any(letter in yellow_letters for letter in gray_letters)):
+                        return False
+                if any(word[i] == letter for i, letter in yellow_positions.items()):
+                    return False
+                if not yellow_letters.issubset(set(word)):
+                    return False
+                if any(word[i] != letter for i, letter in green_positions.items()):
+                    return False
+                return True
+            
+            possible_words = [word for word in possible_words if valid_word(word)]
+        print("Failed to guess the secret word within the allowed attempts.")
+        return False, remaining_attempts
+
+
+    def mcts_guessing(self):
+        # This does not work yet, I just started writing some code here.
+        remaining_attempts = self.max_guesses
+        
+        for attempt in range(1, remaining_attempts + 1):
+            if not self.valid_guesses:
+                print("No more valid guesses available.")
+                return False, attempt
+
+            scores = defaultdict(float)
+            simulations = 100  # Number of simulations per word
+
+            for word in self.valid_guesses:
+                total_score = 0.0
+
+                for _ in range(simulations):
+                    temp_game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=self.max_guesses, num_games=10, strategy="random")
+                    temp_game.secret_word = self.secret_word
+                    temp_game.valid_guesses = [word] + [w for w in self.valid_guesses if w != word]
+
+                    feedback = temp_game.guess_word(word)
+                    green_score = feedback.count('Green') * 2
+                    yellow_score = feedback.count('Yellow') * 1
+                    total_score += green_score + yellow_score
+
+                scores[word] = total_score / simulations
+
+            best_guess = max(scores, key=scores.get)
+            feedback = self.guess_word(best_guess)
+            self.display_guess_feedback(best_guess, feedback)
+
+            if best_guess == self.secret_word:
+                print("The secret word was guessed correctly!")
+                return True, attempt
+
+            gray_letters = {best_guess[i] for i in range(len(feedback)) if feedback[i] == 'Gray'}
+            yellow_positions = {i: best_guess[i] for i in range(len(feedback)) if feedback[i] == 'Yellow'}
+            green_positions = {i: best_guess[i] for i in range(len(feedback)) if feedback[i] == 'Green'}
 
             def valid_word(word):
                 if any(letter in word for letter in gray_letters):
@@ -107,11 +179,11 @@ class WordleSimulator:
                     return False
                 return True
 
-            possible_words = [word for word in possible_words if valid_word(word)]
+            self.valid_guesses = [word for word in self.valid_guesses if valid_word(word)]
 
         print("Failed to guess the secret word within the allowed attempts.")
-        return False, self.max_guesses
-
+        return False, remaining_attempts
+    
     def simulate_games(self):
         successes = 0
         attempts_distribution = []
