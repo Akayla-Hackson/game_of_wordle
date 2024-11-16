@@ -191,8 +191,7 @@ class WordleSimulator:
 
     def random_guessing_with_feedback(self):
         remaining_attempts = self.max_guesses
-        # possible_words = self.valid_guesses.copy()
-        print("Initial possible words:", self.valid_guesses)
+        # print("Initial possible words:", self.valid_guesses)
 
         for attempt in range(1, remaining_attempts + 1):
             if not self.valid_guesses:
