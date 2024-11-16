@@ -22,7 +22,6 @@ class WordleSimulator:
     def reset_game(self):
         self.secret_word = random.choice(self.valid_solutions)
         self.valid_guesses = self.valid_solutions.copy()
-
         print(f"The secret word is: {self.secret_word}")
 
     def play_game(self):
