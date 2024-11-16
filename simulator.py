@@ -293,17 +293,11 @@ class WordleSimulator:
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.savefig(f'{directory}/{self.max_guesses}guesses_{self.num_games}_games.png')
 
-    def test_guess_word(self):
-        game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy)
-        for guess in self.valid_guesses:
-            feedback = game.guess_word(guess)
-            print(f"Guess: {guess} -> Feedback: {feedback}")
-
-    
+ 
 def main(args):
         game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy)
         game.simulate_games()
-        # game.test_guess_word()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the Wordle simulator with different strategies.")
