@@ -216,7 +216,7 @@ class WordleSimulator:
                     updated_possible_words.append(word)
                     
             self.valid_guesses = updated_possible_words
-            print("Updated possible words after feedback:", self.valid_guesses)
+            # print("Updated possible words after feedback:", self.valid_guesses)
         print("Failed to guess the secret word within the allowed attempts.")
         return False, remaining_attempts
 
