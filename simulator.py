@@ -7,6 +7,7 @@ import os
 import argparse
 from tqdm import tqdm
 from colorama import Fore, Style, init
+from collections import Counter
 
 init(autoreset=True)  # Auto-reset colorama colors
 
@@ -20,12 +21,15 @@ class WordleSimulator:
 
     def reset_game(self):
         self.secret_word = random.choice(self.valid_solutions)
-        print(f"The secret word is: {self.secret_word}")
         self.valid_guesses = self.valid_solutions.copy()
+
+        print(f"The secret word is: {self.secret_word}")
 
     def play_game(self):
         if self.strategy == 'random':
             return self.random_guessing()
+        elif self.strategy == "random_feedback":
+            return self.random_guessing_with_feedback()
         elif self.strategy == 'baseline':
             return self.baseline_guessing()
         elif self.strategy == 'mcts':
@@ -184,6 +188,74 @@ class WordleSimulator:
         print("Failed to guess the secret word within the allowed attempts.")
         return False, remaining_attempts
     
+
+
+    def random_guessing_with_feedback(self):
+        remaining_attempts = self.max_guesses
+        # possible_words = self.valid_guesses.copy()
+        print("Initial possible words:", self.valid_guesses)
+
+        for attempt in range(1, remaining_attempts + 1):
+            if not self.valid_guesses:
+                print("No more valid guesses available.")
+                return False, attempt
+            
+            guess = random.choice(self.valid_guesses)
+            feedback = self.guess_word(guess)
+            self.display_guess_feedback(guess, feedback)
+
+            if guess == self.secret_word:
+                print("The secret word was guessed correctly!")
+                return True, attempt
+            else:
+                if guess in self.valid_guesses:
+                    self.valid_guesses.remove(guess)
+
+            # update possible_words based on feedback
+            updated_possible_words = []
+            for word in self.valid_guesses:
+                if self.is_valid_guess(word, guess, feedback):
+                    updated_possible_words.append(word)
+                    
+            self.valid_guesses = updated_possible_words
+            print("Updated possible words after feedback:", self.valid_guesses)
+        print("Failed to guess the secret word within the allowed attempts.")
+        return False, remaining_attempts
+
+    def is_valid_guess(self, word, guess, feedback):
+        # map each letter in guess to its feedback
+        word_counts = Counter(word)
+        guess_feedback = defaultdict(list)
+        for index, (char, fb) in enumerate(zip(guess, feedback)):
+            guess_feedback[fb].append(char)
+        
+        # green feedback: exact matches
+        for index, (g_char, fb) in enumerate(zip(guess, feedback)):
+            if fb == 'Green' and word[index] != g_char:
+                # print(f"Removing '{word}' because at index {index}, expected '{g_char}' but found '{word[index]}'.")
+                return False
+
+        # yellow feedback: right letter, wrong position
+        for index, (g_char, fb) in enumerate(zip(guess, feedback)):
+            if fb == 'Yellow':
+                if word[index] == g_char:
+                    # print(f"Removing '{word}' because '{g_char}' should not be at index {index}.")
+                    return False
+                if word_counts[g_char] <= 0:
+                    # print(f"Removing '{word}' because there are not enough '{g_char}' to match feedback.")
+                    return False
+                word_counts[g_char] -= 1
+
+        # gray feedback: letter shouldn't be present
+        for g_char in guess_feedback['Gray']:
+            if word_counts[g_char] > 0 and g_char not in guess_feedback['Green'] and g_char not in guess_feedback['Yellow']:
+                # print(f"Removing '{word}' because it contains '{g_char}' which should not be present at all based on feedback.")
+                return False
+            word_counts[g_char] -= 1
+
+        return True
+
+
     def simulate_games(self):
         successes = 0
         attempts_distribution = []
@@ -221,9 +293,17 @@ class WordleSimulator:
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.savefig(f'{directory}/{self.max_guesses}guesses_{self.num_games}_games.png')
 
+    def test_guess_word(self):
+        game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy)
+        for guess in self.valid_guesses:
+            feedback = game.guess_word(guess)
+            print(f"Guess: {guess} -> Feedback: {feedback}")
+
+    
 def main(args):
         game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy)
         game.simulate_games()
+        # game.test_guess_word()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the Wordle simulator with different strategies.")
@@ -232,3 +312,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_games', type=int, default=1000, help='The number of games to simulate.')
     args = parser.parse_args()
     main(args)
+
+
+
+    # python simulator.py --strategy random --max_guesses 6 --num_games 1000
