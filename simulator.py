@@ -66,7 +66,6 @@ class WordleSimulator:
             feedback = self.guess_word(guess)
             self.valid_guesses.remove(guess)
             self.display_guess_feedback(guess, feedback)
-
             if guess == self.secret_word:
                 print("The secret word was guessed correctly!")
                 return True, attempt
@@ -77,8 +76,17 @@ class WordleSimulator:
         remaining_attempts = self.max_guesses
         possible_words = self.valid_guesses.copy()
         history = []
-
-        for attempt in range(1, remaining_attempts + 1):
+        first_guess_choices = ["crane"]
+        first_guess = random.choice(first_guess_choices)
+        feedback = self.guess_word(first_guess)
+        self.display_guess_feedback(first_guess, feedback)
+        self.valid_guesses.remove(first_guess)
+        history.append((first_guess, feedback))
+        possible_words = self.filter_possible_words_real(possible_words, first_guess, feedback)
+        if first_guess == self.secret_word:
+            print("The secret word was guessed correctly on the first attempt!")
+            return True, 1
+        for attempt in range(2, remaining_attempts + 1):
             if not possible_words:
                 print("No more valid guesses available.")
                 return False, attempt
@@ -99,53 +107,34 @@ class WordleSimulator:
         return False, remaining_attempts
 
     def mcts_guessing(self):
-        # Initialize the game state
         remaining_attempts = self.max_guesses
         possible_words = self.valid_guesses.copy()
         history = []
-        
-        # Step 1: Make the first guess randomly from TALES, CRANE, or SALET
         first_guess_choices = ["crane"]
         first_guess = random.choice(first_guess_choices)
-        
-        print(f"First guess: {first_guess}")
         feedback = self.guess_word(first_guess)
         self.display_guess_feedback(first_guess, feedback)
         self.valid_guesses.remove(first_guess)
         history.append((first_guess, feedback))
-        
-        # Check if the first guess is correct
         if first_guess == self.secret_word:
             print("The secret word was guessed correctly on the first attempt!")
             return True, 1
-        
-        # Filter possible words based on the first guess feedback
         possible_words = self.filter_possible_words_real(possible_words, first_guess, feedback)
+
         
-        # Print updated game state after the first guess
-        print(f"Updated game state after the first guess:")
-        print(f"Remaining attempts: {remaining_attempts - 1}")
-        print(f"Possible words: {len(possible_words)}")
-        print(f"History: {history}")
-        
-        # Step 2: Proceed with MCTS for the remaining attempts
+        # Run MCTS for the remaining attempts
         for attempt in range(2, remaining_attempts + 1):
-            # Create the root node of the MCTS tree
             root = self.Node(
                 parent=None,
                 state={'history': history.copy(), 'possible_words': possible_words.copy()},
                 untried_actions=possible_words.copy()
             )
             
-            # Run the MCTS algorithm for a fixed number of iterations
-            num_iterations = 1000  # Adjusted for performance
+            num_iterations = 1000
             for _ in range(num_iterations):
-                # Select a node to expand
                 node = root
                 while node.untried_actions == [] and node.children != []:
                     node = node.select_child()
-                
-                # Expand the selected node
                 if node.untried_actions != []:
                     action = self.select_next_guess(node.untried_actions, node.state)
                     node.untried_actions.remove(action)
@@ -153,55 +142,50 @@ class WordleSimulator:
                     untried_actions = new_state['possible_words']
                     child_node = node.add_child(action, new_state, untried_actions)
                     node = child_node
-                
-                # Simulate a random playout from the expanded node
                 reward = self.simulate_heuristic_playout(node.state, remaining_attempts - attempt)
-                
-                # Backpropagate the reward to the root node
                 while node is not None:
                     node.visit_count += 1
                     node.total_reward += reward
                     node = node.parent
-            
-            # Choose the best action from the root node
             if root.children:
                 best_child = max(root.children, key=lambda c: c.visit_count)
                 guess = best_child.action_taken
             else:
                 guess = random.choice(possible_words)
-            
-            # Get feedback from the actual game
             feedback = self.guess_word(guess)
             self.display_guess_feedback(guess, feedback)
             self.valid_guesses.remove(guess)
-            
-            # Check if the guess is correct
             if guess == self.secret_word:
                 print("The secret word was guessed correctly!")
                 return True, attempt
             
-            # Update the game state
             history.append((guess, feedback))
             possible_words = self.filter_possible_words(possible_words, guess, feedback)
-            
-            # Print updated game state
-            print(f"Updated game state:")
-            print(f"Remaining attempts: {remaining_attempts - attempt}")
-            print(f"Possible words: {len(possible_words)}")
-            print(f"History: {history}")
-        
+
         print("Failed to guess the secret word within the allowed attempts.")
         return False, remaining_attempts
 
     def select_next_guess(self, possible_guesses, state):
-        # Prioritize guesses with the highest weights
-        weights = self.calculate_word_weights(possible_guesses, state)
-        max_weight = max(weights.values())
-        best_guesses = [word for word, weight in weights.items() if weight == max_weight]
-        return random.choice(best_guesses)
+        if self.prioritize_success:
+            letter_counts = defaultdict(int)
+            for word in possible_guesses:
+                for letter in set(word):
+                    letter_counts[letter] += 1
+            word_scores = {}
+            for word in possible_guesses:
+                score = sum(letter_counts[letter] for letter in set(word))
+                word_scores[word] = score
+
+            max_score = max(word_scores.values())
+            best_words = [word for word, score in word_scores.items() if score == max_score]
+            return random.choice(best_words)
+        else:
+            weights = self.calculate_word_weights(possible_guesses, state)
+            max_weight = max(weights.values())
+            best_guesses = [word for word, weight in weights.items() if weight == max_weight]
+            return random.choice(best_guesses)
 
     def calculate_word_weights(self, words, state):
-        # Calculate weights based on green and yellow letters
         history = state['history']
         green_positions = {}
         yellow_letters = set()
@@ -218,7 +202,7 @@ class WordleSimulator:
             weight = 0
             for i, letter in enumerate(word):
                 if i in green_positions and letter == green_positions[i]:
-                    weight += 30
+                    weight += 50
                 elif letter in yellow_letters:
                     weight += 10
             weights[word] = weight
@@ -227,7 +211,7 @@ class WordleSimulator:
     def simulate_heuristic_playout(self, state, remaining_attempts):
         possible_words = state['possible_words']
         if not possible_words:
-            return 0  # No possible words left
+            return 0
         secret_word = random.choice(possible_words)
         current_possible_words = possible_words.copy()
         history = state['history'].copy()
@@ -235,23 +219,19 @@ class WordleSimulator:
         while attempts < remaining_attempts:
             if not current_possible_words:
                 return 0
-            # Select guess based on heuristics
-            if self.
             guess = self.select_next_guess(current_possible_words, state)
             feedback = self.get_feedback(guess, secret_word)
             history.append((guess, feedback))
             if guess == secret_word:
-                # Reward inversely proportional to the number of attempts
                 return 10 + (remaining_attempts - attempts) * 1
             current_possible_words = self.filter_possible_words(current_possible_words, guess, feedback)
             attempts += 1
-        return 0  # Failed to guess the secret word
+        return 0
 
     def simulate_action(self, state, action):
         possible_words = state['possible_words']
         if not possible_words:
             return state  # No possible words left
-        # Simulate feedback as if the action was made
         secret_word = random.choice(possible_words)
         feedback = self.get_feedback(action, secret_word)
         new_possible_words = self.filter_possible_words(possible_words, action, feedback)
@@ -330,23 +310,20 @@ class WordleSimulator:
             self.parent = parent
             self.children = []
             self.state = state  # Contains 'history' and 'possible_words'
-            self.untried_actions = untried_actions  # Possible guesses from this state
+            self.untried_actions = untried_actions
             self.visit_count = 0
             self.total_reward = 0
-            self.action_taken = None  # The action (guess) that led to this node
+            self.action_taken = None
 
         def select_child(self):
-            # UCT formula
             C = 0.5 # Exploration parameter
             total_visits = self.visit_count
             log_total_visits = np.log(total_visits) if total_visits > 0 else 0
 
             def uct_value(child):
                 if child.visit_count == 0:
-                    return float('inf')  # Encourage exploration of unvisited nodes
+                    return float('inf')
                 return (child.total_reward / child.visit_count) + C * np.sqrt(log_total_visits / child.visit_count)
-
-            print(f"Selecting child from {len(self.children)} children")
             selected_child = max(self.children, key=uct_value)
 
             return selected_child
@@ -355,13 +332,11 @@ class WordleSimulator:
             child_node = WordleSimulator.Node(parent=self, state=state, untried_actions=untried_actions)
             child_node.action_taken = action
             self.children.append(child_node)
-            print(f"Child node added to {self.state["history"]} with possible words {len(self.state["possible_words"])}: {child_node.state["history"]} with possible words {len(child_node.state["possible_words"])}")
             return child_node
 
     def simulate_games(self):
         successes = 0
         attempts_distribution = []
-        print(f"Simulating {self.num_games} games with strategy: {self.strategy}\n")
 
         for _ in tqdm(range(self.num_games), desc="Simulating Games", unit="game"):
             self.reset_game()
@@ -397,7 +372,7 @@ class WordleSimulator:
         plt.close()
 
 def main(args):
-    game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy)
+    game = WordleSimulator('./kaggle_data/valid_solutions.csv', max_guesses=args.max_guesses, num_games=args.num_games, strategy=args.strategy, prioritize_success=args.prioritize_success)
     game.simulate_games()
 
 
